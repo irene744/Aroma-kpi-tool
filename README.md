@@ -1,1 +1,137 @@
 # Aroma-kpi-tool
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>餐廳 KPI 損益分析</title>
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://unpkg.com/recharts/umd/Recharts.min.js"></script>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-100">
+
+  <div id="root" class="p-6"></div>
+
+  <script type="text/babel">
+    const { useState } = React;
+    const { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } = Recharts;
+
+    function KPIApp() {
+      const [seatCount, setSeatCount] = useState(30);
+      const [turnoverRate, setTurnoverRate] = useState(2);
+      const [avgSpending, setAvgSpending] = useState(30);
+      const [mode, setMode] = useState('monthly');
+
+      const openDays = 30;
+      const fixedCost = 40000;
+      const grossMargin = 0.65;
+
+      const dailyCustomer = seatCount * turnoverRate;
+      const dailyRevenue = dailyCustomer * avgSpending;
+      const monthlyRevenue = dailyRevenue * openDays;
+
+      const revenue = mode === 'monthly' ? monthlyRevenue : dailyRevenue;
+      const grossProfit = revenue * grossMargin;
+      const netProfit = grossProfit - (mode === 'monthly' ? fixedCost : fixedCost / openDays);
+      const breakevenRevenue = (mode === 'monthly' ? fixedCost : fixedCost / openDays) / grossMargin;
+
+      const chartData = Array.from({ length: 31 }, (_, i) => {
+        const rate = i + 1;
+        const customers = seatCount * rate;
+        const rev = customers * avgSpending * (mode === 'monthly' ? openDays : 1);
+        const profit = rev * grossMargin - (mode === 'monthly' ? fixedCost : fixedCost / openDays);
+        return {
+          rate,
+          revenue: Math.round(rev),
+          profit: Math.round(profit),
+          breakeven: Math.round(breakevenRevenue)
+        };
+      });
+
+      return (
+        <div className="max-w-5xl mx-auto bg-white rounded shadow p-6">
+          <h1 className="text-2xl font-bold mb-4">📊 餐廳 KPI 損益分析工具</h1>
+
+          {/* 切換每日/每月 */}
+          <div className="flex justify-end mb-4 space-x-2">
+            <button
+              onClick={() => setMode('daily')}
+              className={`px-4 py-1 rounded ${mode==='daily' ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}>
+              每日分析
+            </button>
+            <button
+              onClick={() => setMode('monthly')}
+              className={`px-4 py-1 rounded ${mode==='monthly' ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}>
+              每月分析
+            </button>
+          </div>
+
+          {/* 輸入區 */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div>
+              <label className="block font-medium">座位數</label>
+              <input type="number" value={seatCount}
+                onChange={(e) => setSeatCount(Number(e.target.value))}
+                className="w-full border rounded px-2 py-1"/>
+            </div>
+            <div>
+              <label className="block font-medium">翻桌率（每日）</label>
+              <input type="number" value={turnoverRate} step="0.1"
+                onChange={(e) => setTurnoverRate(Number(e.target.value))}
+                className="w-full border rounded px-2 py-1"/>
+            </div>
+            <div>
+              <label className="block font-medium">客單價 ($)</label>
+              <input type="number" value={avgSpending}
+                onChange={(e) => setAvgSpending(Number(e.target.value))}
+                className="w-full border rounded px-2 py-1"/>
+            </div>
+          </div>
+
+          {/* KPI 區 */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <div className="bg-gray-50 p-4 rounded border">
+              <h2 className="text-lg font-semibold mb-2">🔢 營收與盈虧（{mode === 'monthly' ? '每月' : '每日'}）</h2>
+              <p>顧客數：<strong>{dailyCustomer}</strong></p>
+              <p>營收：<strong>${revenue.toFixed(0)}</strong></p>
+              <p>毛利（65%）：<strong>${grossProfit.toFixed(0)}</strong></p>
+              <p>固定成本：<strong>${(mode === 'monthly' ? fixedCost : fixedCost / openDays).toFixed(0)}</strong></p>
+              <p>
+                {netProfit >= 0 ? '✅ 淨利' : '🟥 虧損'}：<strong>${netProfit.toFixed(0)}</strong>
+              </p>
+            </div>
+
+            <div className="bg-gray-50 p-4 rounded border">
+              <h2 className="text-lg font-semibold mb-2">⚖️ 損益平衡（{mode === 'monthly' ? '每月' : '每日'}）</h2>
+              <p>損益平衡營收：<strong>${breakevenRevenue.toFixed(0)}</strong></p>
+              <p>所需翻桌率（打平）：<strong>{(breakevenRevenue / (seatCount * avgSpending)).toFixed(2)}</strong></p>
+            </div>
+          </div>
+
+          {/* 圖表 */}
+          <div className="bg-gray-50 p-4 rounded border">
+            <h2 className="text-lg font-semibold mb-4">📈 翻桌率 vs {mode === 'monthly' ? '每月' : '每日'}營收 / 利潤</h2>
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={chartData}>
+                <XAxis dataKey="rate" label={{ value: '翻桌率', position: 'insideBottom', dy: 10 }}/>
+                <YAxis />
+                <Tooltip />
+                <Legend />
+                <Line type="monotone" dataKey="revenue" stroke="#0ea5e9" name="營收"/>
+                <Line type="monotone" dataKey="breakeven" stroke="#f97316" name="損益平衡營收" strokeDasharray="5 5"/>
+                <Line type="monotone" dataKey="profit" stroke="#10b981" name="淨利"/>
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<KPIApp />);
+  </script>
+
+</body>
+</html>
